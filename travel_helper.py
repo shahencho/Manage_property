@@ -21,6 +21,9 @@ print("Actual Headers:", actual_headers)
 # Telegram bot setup
 TOKEN = '7256193277:AAEMtDw3bqG8DgImbcR0Y4w8Znq39NatknA'  # Replace with your bot's token
 
+# Define a dictionary to track user selections
+user_selections = {}
+
 # Helper function to parse date range from selection
 def parse_date_range(selection):
     month_map = {
@@ -44,8 +47,8 @@ def parse_date_range(selection):
 
 async def start(update: Update, context: CallbackContext):
     keyboard = [
-        [InlineKeyboardButton("🇪🇬 Egypt Sharlem sheic", callback_data='1')],
-        [InlineKeyboardButton("🇪🇬 Xurgada", callback_data='2')],
+        [InlineKeyboardButton("🇪🇬 Egypt: Sharm El Sheikh", callback_data='1')],
+        [InlineKeyboardButton("🇪🇬 Egypt: Hurgada", callback_data='2')],
         [InlineKeyboardButton("🇹🇳 Tunis", callback_data='3')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -62,17 +65,21 @@ async def button(update: Update, context: CallbackContext):
 
     country = ""
     if query.data == '1':
-        country = "Egypt"
+        country = "Egypt: Sharm El Sheikh"
     elif query.data == '2':
-        country = "Egypt"
+        country = "Egypt: Hurgada"
     elif query.data == '3':
         country = "Tunis"
 
-    print(f"country = {country} and query.data is {query.data}")
+    print(f"Button selection of Country -> : {country} and query.data is {query.data}")
+
+    # Store the country selection for the user
+    user_id = query.from_user.id
+    user_selections[user_id] = {"country": country, "nights": None, "date_range": None}
 
     # Proceed to nights selection
     await query.edit_message_text(
-        text="Please select the number of nights:",
+        text="Please select the number of nights you want to spend in:\n🌍 " + country,
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("6", callback_data=f'{query.data}_6')],
             [InlineKeyboardButton("8", callback_data=f'{query.data}_8')],
@@ -83,45 +90,50 @@ async def button(update: Update, context: CallbackContext):
 async def night_selection(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
-    print(f"query = {query}")
+
+    # Split the callback data
     data = query.data.split('_')
     country = ""
     if data[0] == '1':
-        country = "Egypt"
+        country = "Egypt: Sharm El Sheikh"
     elif data[0] == '2':
-        country = "Egypt"
+        country = "Egypt: Hurgada"
     elif data[0] == '3':
         country = "Tunis"
 
-    nights = data[1]
+    print(f"Function [night_selection] data is -> : {data} and selected country is {country}")
 
-    print(f"data {data}")
-    print(f"country {country}")
-    print(f"nights {nights}")
+    # Store the user's night selection
+    user_id = query.from_user.id
+    user_selections[user_id]["country"] = country
+    user_selections[user_id]["nights"] = data[1]
 
     # Proceed to date selection
     await query.edit_message_text(
-        text="Please select your preferred date range or choose 'Any':",
+        text=f"You chose \n🌍 <b>Country:</b> {country}\n🌙 <b>Nights:</b> {data[1]}\n\nPlease select your preferred date range:",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("2024 - Sep", callback_data=f'{data[0]}_{nights}_2024_Sep')],
-            [InlineKeyboardButton("2024 - Oct", callback_data=f'{data[0]}_{nights}_2024_Oct')],
-            [InlineKeyboardButton("2024 - Nov", callback_data=f'{data[0]}_{nights}_2024_Nov')],
-            [InlineKeyboardButton("2024 - Dec", callback_data=f'{data[0]}_{nights}_2024_Dec')],
-            [InlineKeyboardButton("2025 - Jan", callback_data=f'{data[0]}_{nights}_2025_Jan')],
-            [InlineKeyboardButton("2025 - Feb", callback_data=f'{data[0]}_{nights}_2025_Feb')],
-            [InlineKeyboardButton("2025 - Mar", callback_data=f'{data[0]}_{nights}_2025_Mar')],
-            [InlineKeyboardButton("Any", callback_data=f'{data[0]}_{nights}_any')]
-        ])
+            [InlineKeyboardButton("Sep 2024", callback_data=f'{data[0]}_{data[1]}_2024_Sep')],
+            [InlineKeyboardButton("Oct 2024", callback_data=f'{data[0]}_{data[1]}_2024_Oct')],
+            [InlineKeyboardButton("Nov 2024", callback_data=f'{data[0]}_{data[1]}_2024_Nov')],
+            [InlineKeyboardButton("Dec 2024", callback_data=f'{data[0]}_{data[1]}_2024_Dec')],
+            [InlineKeyboardButton("Jan 2025", callback_data=f'{data[0]}_{data[1]}_2025_Jan')],
+            [InlineKeyboardButton("Feb 2025", callback_data=f'{data[0]}_{data[1]}_2025_Feb')],
+            [InlineKeyboardButton("Mar 2025", callback_data=f'{data[0]}_{data[1]}_2025_Mar')],
+            [InlineKeyboardButton("Any", callback_data=f'{data[0]}_{data[1]}_any')]
+        ]),
+        parse_mode='HTML'
     )
+
+from datetime import datetime
 
 async def date_selection(update: Update, context: CallbackContext):
     query = update.callback_query
-    print(f"[DEBUG] Received callback query: {query}")
     await query.answer()
 
     # Split the callback data
     data = query.data.split('_')
-    print(f"[DEBUG] Split data: {data}")
+
+    print(f"Function [date_selection] data is -> : {data}")
 
     # Initialize variables
     country = ""
@@ -129,74 +141,137 @@ async def date_selection(update: Update, context: CallbackContext):
     date_range = None
     start_date, end_date = None, None
 
+    # Retrieve user's selections
+    user_id = query.from_user.id
+    user_selection = user_selections.get(user_id, {"country": None, "nights": None, "date_range": None})
+
     # Determine country based on data[0]
     if len(data) >= 2:
         if data[0] == '1':
-            country = "Egypt"
+            country = "Egypt: Sharm El Sheikh"
         elif data[0] == '2':
-            country = "Egypt"
+            country = "Egypt: Hurgada"
         elif data[0] == '3':
             country = "Tunis"
 
     # Determine nights and date range
-    if len(data) >= 2:
+    if len(data) >= 3:
         nights = data[1]
-    
-    # Check if 'any' is selected or a specific date range
-    if len(data) == 3 and data[2] == "any":
-        date_range = 'any'
-    elif len(data) == 4:
-        date_range = data[2] + "_" + data[3]
+        date_range = data[2]
+        if len(data) == 4:
+            date_range += f"_{data[3]}"
     else:
-        print("[ERROR] Unexpected callback data format")
-        await query.edit_message_text(text="🚫 Invalid selection. Please try again.")
+        await query.edit_message_text(
+            text="🚫 Invalid selection. Please try again.",
+            parse_mode='HTML'
+        )
         return
 
-    print(f"[DEBUG] Country: {country}, Nights: {nights}, Date Range: {date_range}")
+    # Update the user's selection
+    user_selection["country"] = country
+    user_selection["nights"] = nights
+    user_selection["date_range"] = date_range
+    user_selections[user_id] = user_selection
 
+    # Provide feedback on current selection
+    current_selection = (
+        f"Current Selection:\n"
+        f"🌍 <b>Country:</b> {user_selection['country']}\n"
+        f"🌙 <b>Nights:</b> {user_selection['nights']}\n"
+        f"📅 <b>Date Range:</b> {user_selection['date_range']}\n\n"
+    )
+
+    # Handle 'any' date range case
     if date_range == 'any':
         start_date, end_date = None, None
     else:
         start_date, end_date = parse_date_range(date_range)
 
     if date_range != 'any' and (start_date is None or end_date is None):
-        response = "🚫 Invalid date range selected. Please try again."
+        response = f"{current_selection}🚫 Invalid date range selected. Please try again."
         keyboard = [[InlineKeyboardButton("Back to Main Menu", callback_data='back_to_main')]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text(text=response, reply_markup=reply_markup)
+        await query.edit_message_text(
+            text=response,
+            reply_markup=reply_markup,
+            parse_mode='HTML'
+        )
         return
+
+    # Debugging: Output the current selection
+    print(current_selection)
+
+    # Static data for testing
+    # records = [
+    #     {
+    #         'id': '20',
+    #         'Agency_Name': 'Anriva',
+    #         'Country': 'Egypt: Sharm El Sheikh',
+    #         'City_Town': 'Monastir',
+    #         'Hotel_Name': 'Mediterranee Thalasso Golf',
+    #         'Hotel_Rating_Stars': '***',
+    #         'Available_Dates_To_Fly': '09/06/2024',
+    #         'Available_Return_Dates': '09/16/2024',
+    #         'Total_Price': '$2,362',
+    #         'How_Many_Nights': '8'
+    #     },
+    #     {
+    #         'id': '21',
+    #         'Agency_Name': 'Anriva',
+    #         'Country': 'Egypt: Sharm El Sheikh',
+    #         'City_Town': 'Monastir',
+    #         'Hotel_Name': 'Mediterranee Thalasso Golf',
+    #         'Hotel_Rating_Stars': '***',
+    #         'Available_Dates_To_Fly': '09/13/2024',
+    #         'Available_Return_Dates': '09/23/2024',
+    #         'Total_Price': '$2,362',
+    #         'How_Many_Nights': '8'
+    #     }
+    # ]
 
     # Read data from Google Sheet based on the selection
     records = wks.get_all_records(expected_headers=expected_headers)
     print(f"[DEBUG] Filtering for Country: {country}, Nights: {nights}, Date Range: {date_range}")
-
+    
     found_records = []
     for record in records:
         try:
             available_dates_to_fly = datetime.strptime(record["Available_Dates_To_Fly"], '%m/%d/%Y')
             available_return_dates = datetime.strptime(record["Available_Return_Dates"], '%m/%d/%Y')
 
-            if (date_range == 'any') or \
-               (available_dates_to_fly <= end_date and available_return_dates >= start_date) or \
-               (available_dates_to_fly >= start_date and available_dates_to_fly <= end_date) or \
-               (available_return_dates >= start_date and available_return_dates <= end_date):
-                if record["Country"].strip() == country and str(record["How_Many_Nights"]) == nights:
-                    found_records.append(record)
-        except ValueError as e:
-            print(f"[DEBUG] Date parsing error: {e}")  # Handle invalid date format
+            # Debug print statements
+            print(f"Checking record: {record}")
+            print(f"Available Dates To Fly: {available_dates_to_fly}, Available Return Dates: {available_return_dates}")
+            print(f"Date Range Start: {start_date}, End: {end_date}")
 
-    print(f"[DEBUG] Found records: {found_records}")
+            # Check if the available dates fall within the selected range
+            date_in_range = (start_date is None or end_date is None) or (start_date <= available_return_dates and end_date >= available_dates_to_fly)
+            print(f"Date in range: {date_in_range}")
+
+            # Additional debug to ensure matching country and nights
+            record_country_match = record["Country"].strip() == country
+            record_nights_match = str(record["How_Many_Nights"]) == nights
+            print(f"Country match: {record_country_match}, Nights match: {record_nights_match}")
+
+            if date_in_range and record_country_match and record_nights_match:
+                found_records.append(record)
+                print("Record added:", record)  # Debugging
+        except ValueError as e:
+            print(f"[DEBUG] Date parsing error: {e}")
+
+    print(f"Found records in static data - after search: {found_records}")
 
     if found_records:
-        response = "We found some great hot deals for you:\n\n"
+        response = f"{current_selection}We found some great hot deals for you:\n\n"
         for record in found_records:
             response += (
-                f"📍 **City/Town**: {record['City_Town']}\n"
-                f"🏨 **Hotel Name**: {record['Hotel_Name']}\n"
-                f"⭐ **Hotel Rating**: {record['Hotel_Rating_Stars']}\n"
-                f"✈️ **Available Dates to Fly**: {record['Available_Dates_To_Fly']}\n"
-                f"🏠 **Available Return Dates**: {record['Available_Return_Dates']}\n"
-                f"💲 **Total Price**: ${record['Total_Price']}\n\n"
+                f"🔥 <b>HOT DEAL FROM AGENCY:</b> <b>{record['Agency_Name']}</b>\n"
+                f"📍 <b>City/Town:</b> {record['City_Town']}\n"
+                f"🏨 <b>Hotel Name:</b> {record['Hotel_Name']}\n"
+                f"⭐ <b>Hotel Rating:</b> {record['Hotel_Rating_Stars']}\n"
+                f"✈️ <b>Available Dates to Fly:</b> {record['Available_Dates_To_Fly']}\n"
+                f"🏠 <b>Available Return Dates:</b> {record['Available_Return_Dates']}\n"
+                f"💲 <b>Total Price:</b> {record['Total_Price']}\n\n"
             )
         response += (
             "📞 If any of these deals look good to you, please contact the respective agency for more details.\n"
@@ -204,22 +279,27 @@ async def date_selection(update: Update, context: CallbackContext):
         )
     else:
         response = (
-            "🚫 Sorry, no hot deals were found for the selected options. Please try different criteria or choose another country.\n\n"
+            f"{current_selection}🚫 Sorry, no hot deals were found for the selected options. Please try different criteria or choose another country.\n\n"
             "🔙 You can go back to the main menu and start a new search."
         )
 
-    # Add a button to go back to the main menu
     keyboard = [
         [InlineKeyboardButton("Back to Main Menu", callback_data='back_to_main')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(text=response, reply_markup=reply_markup)
+    await query.edit_message_text(
+        text=response,
+        reply_markup=reply_markup,
+        parse_mode='HTML'
+    )
+
+
 
 
 async def handle_back_to_main(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
-    
+
     # Ensure we are using the correct method to send the response
     chat_id = query.message.chat_id
     await context.bot.send_message(
@@ -228,8 +308,8 @@ async def handle_back_to_main(update: Update, context: CallbackContext):
              "Please share a few important things that you want me to help you with.\n"
              "What country are you looking for?",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🇪🇬 Egypt Sharlem sheic", callback_data='1')],
-            [InlineKeyboardButton("🇪🇬 Xurgada", callback_data='2')],
+            [InlineKeyboardButton("🇪🇬 Egypt: Sharm El Sheikh", callback_data='1')],
+            [InlineKeyboardButton("🇪🇬 Egypt: Hurgada", callback_data='2')],
             [InlineKeyboardButton("🇹🇳 Tunis", callback_data='3')]
         ])
     )
@@ -237,8 +317,8 @@ async def handle_back_to_main(update: Update, context: CallbackContext):
 async def handle_text_input(update: Update, context: CallbackContext):
     # Respond to any text input with a prompt to select from the buttons
     keyboard = [
-        [InlineKeyboardButton("🇪🇬 Egypt Sharlem sheic", callback_data='1')],
-        [InlineKeyboardButton("🇪🇬 Xurgada", callback_data='2')],
+        [InlineKeyboardButton("🇪🇬 Egypt: Sharm El Sheikh", callback_data='1')],
+        [InlineKeyboardButton("🇪🇬 Hurgada", callback_data='2')],
         [InlineKeyboardButton("🇹🇳 Tunis", callback_data='3')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -247,11 +327,9 @@ async def handle_text_input(update: Update, context: CallbackContext):
         reply_markup=reply_markup
     )
 
-
 async def debug_callback_data(update: Update, context: CallbackContext):
     query = update.callback_query
     print(f"[DEBUG] Global handler: Received callback data: {query.data}")
-
 
 # Define main function to run the bot
 def main():
