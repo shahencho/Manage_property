@@ -184,6 +184,9 @@ async def date_selection(update: Update, context: CallbackContext):
         f"📅 <b>Date Range:</b> {user_selection['date_range']}\n\n"
     )
 
+    
+
+
     # Handle 'any' date range case
     if date_range == 'any':
         start_date, end_date = None, None
@@ -268,6 +271,36 @@ async def date_selection(update: Update, context: CallbackContext):
         )
     
 
+    # Get the "User_Selections_Sheet" sheet
+
+
+    
+    try:
+        user_selections_sheet = sh.worksheet("User_Selections_Sheet")
+        print("Successfully opened User_Selections_Sheet")
+    except Exception as e:
+        print(f"Error opening User_Selections_Sheet: {e}")
+
+    user_selections_sheet.update_acell('B2', 23332)
+    user_selections_sheet.update_acell('A2', 88887)
+    user_selections_sheet.update_acell('B2', country)
+    user_selections_sheet.update_acell('c2', nights)
+    user_selections_sheet.update_acell('d2', date_range)
+
+    user_selections_sheet.update_acell('e2',"oooosta    rt logic with find if user alread in ")
+
+    user_selections_list = user_selections_sheet.get_all_records()
+    existing_user = next((user for user in user_selections_list if user['telegram_id'] == update.effective_user.id), None)
+    if existing_user:
+        row = user_selections_list.index(existing_user) + 2
+        user_selections_sheet.update_cell(row, 2, country)
+        user_selections_sheet.update_cell(row, 3, nights)
+        user_selections_sheet.update_cell(row, 4, date_range)
+        user_selections_sheet.update_cell(row, 5, datetime.now().strftime("%Y-%m-%d"))
+
+    else:
+        user_selections_sheet.append_row([update.effective_user.id, country, nights, date_range, datetime.now().strftime("%Y-%m-%d")])
+   
     keyboard = [
         [InlineKeyboardButton("Back to Main Menu", callback_data='back_to_main')]
     ]
@@ -278,9 +311,7 @@ async def date_selection(update: Update, context: CallbackContext):
         parse_mode='HTML'
     )
 
-
-
-
+ 
 async def handle_back_to_main(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
@@ -316,6 +347,87 @@ async def debug_callback_data(update: Update, context: CallbackContext):
     query = update.callback_query
     print(f"[DEBUG] Global handler: Received callback data: {query.data}")
 
+
+import gspread  # импорти библиотеку
+import telebot
+
+bot = telebot.TeleBot(TOKEN)
+
+
+#bot.send_message(344431796,"Շնորհավոր ազզ") #Sench
+# bot.send_message(449708378,"dddddddddddddd  ազզ") 
+
+def send_deal_to_user(telegram_id):
+    print(f"[INFO] Sending deals to user {telegram_id}")
+    # Read user selections from sheet
+    user_sheet = gs.open_by_key('1A7mr9MAA1gomAwOv3NeoVhIPAYOgf1mv3fxTlbcQjf4').worksheet("User_Selections_Sheet")
+    user_row = user_sheet.find(telegram_id)
+    if user_row is None:
+        bot.send_message(telegram_id, "No user data found")
+        print(f"[INFO] No user data found for {telegram_id}")
+        return
+
+    country = user_sheet.cell(user_row.row, 2).value
+    nights = user_sheet.cell(user_row.row, 3).value
+    date_range = user_sheet.cell(user_row.row, 4).value
+    last_visit = user_sheet.cell(user_row.row, 5).value
+
+
+    print(f"[INFO] User {telegram_id} is looking for {country} {nights} {date_range} {last_visit}")
+
+    # Find deals with same criteria in sheet1
+    sheet1 = gs.open_by_key('1A7mr9MAA1gomAwOv3NeoVhIPAYOgf1mv3fxTlbcQjf4').worksheet("Sheet1")
+   
+    query = f"Country='{country}' and How_Many_Nights={nights} and date_range = '{date_range}' and updated_date > '{last_visit}'"
+
+    print(f"[INFO] Query: {query}")
+
+    # deals = sheet1.get_all_records()
+    deals = []
+    for deal in sheet1.get_all_records():
+        if deal['Country'] == country and deal['How_Many_Nights'] == int(nights) and deal['date_range'] == date_range and datetime.strptime(deal['updated_date'], '%Y-%m-%d') >= datetime.strptime(last_visit, '%Y-%m-%d'):
+
+            print(datetime.strptime(deal['updated_date'], '%Y-%m-%d') )
+
+            print(datetime.strptime(last_visit, '%Y-%m-%d')     )     
+
+            deals.append(deal)
+            print(f"[INFO] Found deal for user {telegram_id}: {deal} date range is {date_range} and updated_date is {deal['updated_date']} and last visit is {last_visit}")
+
+
+
+    if not deals:
+        bot.send_message(telegram_id, "No deals found")
+        print(f"[INFO] No deals found for user {telegram_id}")
+        return
+
+    print(f"[INFO] Sending {len(deals)} deals to user {telegram_id}")
+
+    # Send deals to user
+    for deal in deals:
+        bot.send_message(
+            telegram_id,
+            f"We have found for you good deals:\nDeal ID: {deal['id']}\nAgency Name: {deal['Agency_Name']}"
+        )
+
+# send_deal_to_user("449708378")
+import asyncio
+
+# async def send_deal_to_user_loop():
+#     while True:
+#         send_deal_to_user("449708378")
+#         await asyncio.sleep(1500)  # 5 minutes
+
+# asyncio.run(send_deal_to_user_loop())
+
+
+
+
+
+
+
+
+
 # Define main function to run the bot
 def main():
     # Create the application
@@ -334,3 +446,12 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+
+
+
+
+# 
+
+
