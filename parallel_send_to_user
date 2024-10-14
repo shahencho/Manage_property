@@ -1,0 +1,76 @@
+from datetime import datetime
+import telebot
+import gspread
+from datetime import datetime
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CallbackContext, CommandHandler, CallbackQueryHandler, MessageHandler, filters
+import threading  # Import threading for repeated function execution
+
+# Google Sheets setup
+gs = gspread.service_account(filename='credentials.json')
+sh = gs.open_by_key('1A7mr9MAA1gomAwOv3NeoVhIPAYOgf1mv3fxTlbcQjf4')
+wks = sh.get_worksheet(0)
+
+# Define expected headers
+expected_headers = [
+    'id', 'Agency_Name', 'Country', 'City_Town', 'Hotel_Name', 
+    'Hotel_Rating_Stars', 'Available_Dates_To_Fly', 'Available_Return_Dates', 'Total_Price', 'How_Many_Nights'
+]
+
+TOKEN = '7503880736:AAHIaSVXCVfwCUFd61pnoXpktQBO86o3JE4' 
+bot = telebot.TeleBot(TOKEN)
+
+def send_deal_to_user(telegram_id):
+    print(f"[INFO] Sending deals to user {telegram_id}")
+    # Read user selections from sheet
+    user_sheet = gs.open_by_key('1A7mr9MAA1gomAwOv3NeoVhIPAYOgf1mv3fxTlbcQjf4').worksheet("User_Selections_Sheet")
+    user_row = user_sheet.find(telegram_id)
+    if user_row is None:
+        bot.send_message(telegram_id, "No user data found")
+        print(f"[INFO] No user data found for {telegram_id}")
+        return
+
+    country = user_sheet.cell(user_row.row, 2).value
+    nights = user_sheet.cell(user_row.row, 3).value
+    date_range = user_sheet.cell(user_row.row, 4).value
+    last_visit = user_sheet.cell(user_row.row, 5).value
+
+    print(f"[INFO] User {telegram_id} is looking for {country} {nights} {date_range} {last_visit}")
+
+    # Find deals with the same criteria in sheet1
+    sheet1 = gs.open_by_key('1A7mr9MAA1gomAwOv3NeoVhIPAYOgf1mv3fxTlbcQjf4').worksheet("Sheet1")
+    query = f"Country='{country}' and How_Many_Nights={nights} and date_range = '{date_range}' and updated_date > '{last_visit}'"
+
+    print(f"[INFO] Query: {query}")
+
+    deals = []
+    for deal in sheet1.get_all_records():
+        if deal['Country'] == country and deal['How_Many_Nights'] == int(nights) and deal['date_range'] == date_range and datetime.strptime(deal['updated_date'], '%Y-%m-%d') >= datetime.strptime(last_visit, '%Y-%m-%d'):
+            print(datetime.strptime(deal['updated_date'], '%Y-%m-%d'))
+            print(datetime.strptime(last_visit, '%Y-%m-%d'))     
+            deals.append(deal)
+            print(f"[INFO] Found deal for user {telegram_id}: {deal} date range is {date_range} and updated_date is {deal['updated_date']} and last visit is {last_visit}")
+
+    if not deals:
+        bot.send_message(telegram_id, "No new deals found matching your criteria")
+        print(f"[INFO] No deals found for user {telegram_id}")
+        return
+
+    print(f"[INFO] Sending {len(deals)} deals to user {telegram_id}")
+
+    # Send deals to user
+    for deal in deals:
+        bot.send_message(
+            telegram_id,
+            f"We have found for you good deals matching your criteria:\nDeal ID: {deal['id']}\nAgency Name: {deal['Agency_Name']}"
+        )
+
+
+def schedule_send_deal(telegram_id):
+    # Call the function
+    send_deal_to_user(telegram_id)
+    # Schedule the next call in 15 seconds
+    threading.Timer(150, schedule_send_deal, [telegram_id]).start()
+
+# Start the repeated call
+schedule_send_deal("449708378")

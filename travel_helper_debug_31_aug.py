@@ -421,31 +421,96 @@ import asyncio
 # asyncio.run(send_deal_to_user_loop())
 
 
+import asyncio
+import logging
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 
+# Set up logging configuration
+logging.basicConfig(
+    level=logging.DEBUG,  # Set to DEBUG to capture all levels of logs
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
+async def periodic_deal_check():
+    """Periodically call send_deal_to_user to check and send new deals every 40 seconds."""
+    while True:
+        logger.info("Periodic check initiated.")
+        try:
+            # Using dummy function for testing
+            await dummy_send_deal_to_user("449708378")  
+            logger.info("[INFO] dummy_send_deal_to_user function executed.")
+        except Exception as e:
+            logger.error(f"Error in dummy_send_deal_to_user: {e}")
 
+        logger.debug("Sleeping for 40 seconds before the next check.")
+        await asyncio.sleep(40)  # Wait for 40 seconds  
+        logger.info("Woke up from sleep, preparing for next deal check.")
 
+async def dummy_send_deal_to_user(telegram_id):
+    logger.info(f"Dummy send_deal_to_user called for {telegram_id}")
 
-
-
-# Define main function to run the bot
-def main():
+async def run_bot():
     # Create the application
     app = ApplicationBuilder().token(TOKEN).build()
-    # Add handlers
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(button, pattern='^[1-3]$'))
-    app.add_handler(CallbackQueryHandler(night_selection, pattern='^[1-3]_(6|8|10)$'))
-    app.add_handler(CallbackQueryHandler(date_selection, pattern='^[1-3]_(6|8|10)_(2024|2025)_(Sep|Oct|Nov|Dec|Jan|Feb|Mar|any)$'))
-    app.add_handler(CallbackQueryHandler(date_selection, pattern='^[1-3]_(6|8|10)_any$'))
-    app.add_handler(CallbackQueryHandler(handle_back_to_main, pattern='^back_to_main$'))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
-    app.add_handler(CallbackQueryHandler(debug_callback_data))
-    # Run the bot
-    app.run_polling()
 
-if __name__ == '__main__':
-    main()
+    # Add handlers
+
+    # Schedule periodic deal check
+    logger.debug("Scheduling periodic_deal_check task.")
+    periodic_task = asyncio.create_task(periodic_deal_check())  # Correctly schedule the periodic check
+
+    try:
+        # Run the bot until manually stopped
+        logger.debug("Starting bot polling.")
+        loop = asyncio.get_event_loop()
+        await loop.create_task(app.run_polling())
+    finally:
+        # Cancel the periodic task when the bot stops
+        logger.debug("Cancelling periodic deal check task.")
+        periodic_task.cancel()
+        try:
+            await periodic_task  # Ensure the task is properly awaited and cancelled
+        except asyncio.CancelledError:
+            logger.info("Periodic task was cancelled.")
+import asyncio
+
+def main():
+    logger.info("Starting main function.")
+    try:
+        # Create a new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Run the bot until manually stopped
+        loop.run_until_complete(run_bot())
+    except Exception as e:
+        logger.error(f"Exception in main: {e}")
+    finally:
+        logger.info("Exiting main function.")
+        # Close the event loop
+        loop.close()
+
+
+
+# # Define main function to run the bot
+# def main():
+#     # Create the application
+#     app = ApplicationBuilder().token(TOKEN).build()
+#     # Add handlers
+#     app.add_handler(CommandHandler("start", start))
+#     app.add_handler(CallbackQueryHandler(button, pattern='^[1-3]$'))
+#     app.add_handler(CallbackQueryHandler(night_selection, pattern='^[1-3]_(6|8|10)$'))
+#     app.add_handler(CallbackQueryHandler(date_selection, pattern='^[1-3]_(6|8|10)_(2024|2025)_(Sep|Oct|Nov|Dec|Jan|Feb|Mar|any)$'))
+#     app.add_handler(CallbackQueryHandler(date_selection, pattern='^[1-3]_(6|8|10)_any$'))
+#     app.add_handler(CallbackQueryHandler(handle_back_to_main, pattern='^back_to_main$'))
+#     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
+#     app.add_handler(CallbackQueryHandler(debug_callback_data))
+#     # Run the bot
+#     app.run_polling()
+
+# if __name__ == '__main__':
+#     main()
 
 
 
