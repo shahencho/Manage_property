@@ -78,7 +78,8 @@ def upload_to_drive(file_path, file_name):
     return file.get('webViewLink')
 
 # Conversation states
-ASK_NAME, ASK_SSN, ASK_ISSUE_TEXT, ASK_ISSUE_MEDIA = range(4)
+# Combine all conversation states in one range to ensure uniqueness
+ASK_NAME, ASK_SSN, ASK_ISSUE_TEXT, ASK_ISSUE_MEDIA, ASK_USER_QUERY = range(5)
 
 # Function to validate user name and SSN
 def validate_user(name: str, last_four_ssn: str):
@@ -142,6 +143,11 @@ async def validate_ssn(update: Update, context: CallbackContext):
 
 # Function to display the main menu with buttons after successful verification
 async def show_main_menu(update: Update, context: CallbackContext):
+
+    logger.info('show_main_menu is  called with update=%s, context=%s', update, context)
+
+
+
     keyboard = [
         [InlineKeyboardButton("Check your bills", callback_data='check_bills')],
         [InlineKeyboardButton("Contact Management", callback_data='contact_management')],
@@ -154,6 +160,10 @@ async def show_main_menu(update: Update, context: CallbackContext):
     elif update.callback_query:
         await update.callback_query.message.edit_text("What would you like to do?", reply_markup=reply_markup)
 
+
+# ASK_USER_QUERY = range(1)
+
+
 # Handle the main menu selections
 async def handle_menu_selection(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -162,14 +172,75 @@ async def handle_menu_selection(update: Update, context: CallbackContext):
     if query.data == 'check_bills':
         await show_user_bills(update, context)
     elif query.data == 'contact_management':
-        await query.edit_message_text("You chose to contact management.")
+        await handle_contact_management(update, context)  # New handler for 'Contact Management'
+
+        # await query.edit_message_text("You chose to contact management.")
     elif query.data == 'report_issues':
         await report_issue_text(update, context)
     elif query.data == 'go_to_main_menu':
         await show_main_menu(update, context)
 
+
+# Function to handle contact management
+async def handle_contact_management(update: Update, context: CallbackContext):
+    logger.info("handle_contact_management called with update=%s", update)
+    query = update.callback_query
+    await query.answer()
+
+    # Prompt user to send their query
+    logger.info("Asking user for contact query")
+    await query.message.reply_text(
+        "If you have an urgent question, please reach out to this phone number: 833 313-2564.\n"
+        "Otherwise, please type your message below, and we will contact you soon."
+    )
+    logger.info("Returning state: ASK_USER_QUERY")
+    return ASK_USER_QUERY
+
+# Function to process the user's query and log it to Google Sheets
+async def process_user_query(update: Update, context: CallbackContext):
+    logger.info("process_user_query called with update=%s", update)
+
+    user_message = update.message.text.strip()
+    user_name = update.message.from_user.first_name  # Get the user's first name (or use username)
+
+    logger.info(f"User query: {user_message}")
+    logger.info(f"User name: {user_name}")
+
+    # Log the user's query to Google Sheets
+    try:
+        log_user_query_in_sheet(user_name, user_message)
+        logger.info("User query logged successfully")
+    except Exception as e:
+        logger.error(f"Failed to log user query to Google Sheets: {e}")
+
+    # Respond to the user and provide a "Return to Main Menu" option
+    await update.message.reply_text("Thank you for your message, we will contact you soon.")
+
+    # Show return to main menu button
+    keyboard = [
+        [InlineKeyboardButton("Return to Main Menu", callback_data='go_to_main_menu')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    logger.info("Returning to main menu")
+    await update.message.reply_text("Please choose:", reply_markup=reply_markup)
+
+    return ConversationHandler.END  # End the conversation after handling the query
+
+# Function to log user query to Google Sheets
+def log_user_query_in_sheet(user_name: str, user_message: str):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    wks.append_row([user_name, user_message, timestamp])  # Add user name in Column A, message in Column B, timestamp in Column C
+
+    logger.info("log_user_query_in_sheet is called.User query logged successfully")
+
+
 # Fetch and display user bills
 async def show_user_bills(update: Update, context: CallbackContext):
+
+      # Log the user's query
+    logger.info(f"show_user_bills called with update=%s, context=%s", update, context)
+
     query = update.callback_query
     await query.answer()
 
@@ -280,6 +351,39 @@ async def handle_issue_media(update: Update, context: CallbackContext):
 
     return ASK_ISSUE_MEDIA  # Stay in ASK_ISSUE_MEDIA state to handle the user's decision
 
+# Function to process the user's query
+# Function to process the user's message
+# async def process_user_query(update: Update, context: CallbackContext):
+#     logger.info("process_user_query called with update=%s", update)
+
+#     user_message = update.message.text.strip()
+#     logger.info("User query: %s", user_message)
+
+#     # Respond to the user and provide a "Return to Main Menu" option
+#     await update.message.reply_text("Thank you for your message, we will contact you soon.")
+
+#     # Show return to main menu button
+#     keyboard = [
+#         [InlineKeyboardButton("Return to Main Menu", callback_data='go_to_main_menu')]
+#     ]
+#     reply_markup = InlineKeyboardMarkup(keyboard)
+
+#     await update.message.reply_text("Please choose:", reply_markup=reply_markup)
+
+#     return ConversationHandler.END  # End the conversation after handling the query
+
+
+# Conversation handler for contact management
+# Conversation handler for contact management
+contact_management_handler = ConversationHandler(
+    entry_points=[CallbackQueryHandler(handle_contact_management, pattern='contact_management')],
+    states={
+        ASK_USER_QUERY: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_user_query)]
+    },
+    fallbacks=[CommandHandler("start", start)]
+)
+
+
 # Handle the user's decision for uploading more media or returning to the main menu
 async def handle_media_decision(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -336,16 +440,18 @@ async def fallback(update: Update, context: CallbackContext):
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
+    # Main conversation handler for identity validation
     conv_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(validate_identity, pattern='validate_identity')],
         states={
             ASK_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_for_ssn)],
             ASK_SSN: [MessageHandler(filters.TEXT & ~filters.COMMAND, validate_ssn)],
+            # ASK_USER_QUERY is removed from here to avoid state conflict
         },
         fallbacks=[MessageHandler(filters.TEXT & ~filters.COMMAND, fallback)],
         per_message=False
     )
-
+    # Issue reporting handler
     issue_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(report_issue_text, pattern='report_issues')],
         states={
@@ -359,11 +465,14 @@ def main():
         per_message=False
     )
 
+    # Add handlers to the bot
     app.add_handler(CommandHandler("start", start))
     app.add_handler(conv_handler)
     app.add_handler(issue_handler)
+    app.add_handler(contact_management_handler)  # Add contact management handler separately
     app.add_handler(CallbackQueryHandler(handle_menu_selection, pattern='^(check_bills|contact_management|report_issues|go_to_main_menu)$'))
     app.add_handler(CallbackQueryHandler(handle_media_decision, pattern='^(upload_more_media|go_to_main_menu)$'))
+
 
     app.run_polling()
 
